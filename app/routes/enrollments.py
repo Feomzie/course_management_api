@@ -6,6 +6,7 @@ from app.dependencies.auth import get_current_student, get_current_admin
 from app.models.course import Course
 from app.models.enrollment import Enrollment
 from app.models.user import User
+from app.schemas.enrollment import EnrollmentResponse
 
 
 router = APIRouter(
@@ -15,7 +16,8 @@ router = APIRouter(
 
 
 @router.post(
-    "/{course_id}"
+    "/{course_id}",
+    response_model=EnrollmentResponse
 )
 
 def enroll(
@@ -70,12 +72,54 @@ def enroll(
     db.commit()
     db.refresh(new_enrollment)
 
+    return new_enrollment
+
+
+@router.delete("/{course_id}")
+def deregister(
+    course_id: int,
+    db: Session = Depends(get_db),
+    student: User = Depends(get_current_student)
+):
+
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == student.id,
+        Enrollment.course_id == course_id
+    ).first()
+
+    if not enrollment:
+        raise HTTPException(
+            status_code=404,
+            detail="Enrollment does not exist"
+        )
+
+    db.delete(enrollment)
+    db.commit()
+
     return {
-        "message": f"Enrolled in {course.title} successfully"
+        "message": "Successfully deregistered from course"
     }
 
 
-@router.get("/")
+@router.get(
+    "/me",
+    response_model=list[EnrollmentResponse]
+)
+
+def get_my_enrollments(
+    db: Session = Depends(get_db),
+    student: User = Depends(get_current_student)
+):
+
+    return db.query(Enrollment).filter(
+        Enrollment.user_id == student.id
+    ).all()
+
+
+@router.get(
+    "/",
+    response_model=list[EnrollmentResponse]
+)
 
 def get_all_enrollments(
     db: Session = Depends(get_db),
